@@ -124,49 +124,58 @@ def auto_book_slot(session, slot_url):
 # 3. ОСНОВНОЙ ЦИКЛ (с поддержкой списка)
 # ==========================================
 if __name__ == "__main__":
-    print(f"Бот запущен. Слежу за {len(TARGET_DATES)} датами.")
-    send_vk_message(f"🤖 Бот запущен! Слежу за {len(TARGET_DATES)} датами Пташникова.")
-    
-    session = get_authorized_session()
-    
-    while True:
-        now = datetime.datetime.now()
+    try:
+        print(f"Бот запущен. Слежу за {len(TARGET_DATES)} датами.")
+        send_vk_message(f"🤖 Бот запущен! Слежу за {len(TARGET_DATES)} датами Пташникова.")
         
-        # Турбо-режим (с 23:58 до 00:05)
-        is_midnight_window = (now.hour == 23 and now.minute >= 58) or (now.hour == 0 and now.minute <= 5)
-        sleep_time = 3 if is_midnight_window else 60
-
-        print(f"--- Новый цикл проверки ({now.strftime('%H:%M:%S')}) ---")
+        session = get_authorized_session()
+        is_booked = False # Флаг для выхода из бесконечного цикла
         
-        is_booked = False # Флаг, чтобы остановиться, если уже записались
-
-        # Перебираем все даты по очереди
-        for target_date in TARGET_DATES:
-            date_url = f"{BASE_PTASHNIKOV_URL}{target_date}/"
-            print(f"Проверяю {target_date}...")
+        while not is_booked:
+            now = datetime.datetime.now()
             
-            slots = find_slots_on_date(session, target_date_url)
-            
-            if slots:
-                print(f"🔥 Найдено {len(slots)} слотов на {target_date}!")
-                send_vk_message(f"🔥 Появились места на {target_date}! Пробую записаться...")
+            # Турбо-режим (с 23:58 до 00:05)
+            is_midnight_window = (now.hour == 23 and now.minute >= 58) or (now.hour == 0 and now.minute <= 5)
+            sleep_time = 3 if is_midnight_window else 60
+    
+            print(f"--- Новый цикл проверки ({now.strftime('%H:%M:%S')}) ---")
+    
+            # Перебираем все даты по очереди
+            for target_date in TARGET_DATES:
+                date_url = f"{BASE_PTASHNIKOV_URL}{target_date}/"
+                print(f"Проверяю {target_date}...")
                 
-                # Берем первый попавшийся слот
-                target_slot = slots[0]
-                success = auto_book_slot(session, target_slot["url"])
+                # ИСПРАВЛЕНО: передаем правильную переменную date_url
+                slots = find_slots_on_date(session, date_url)
                 
-                if success:
-                    send_vk_message(f"🎉 УСПЕХ! Вы записаны на {target_date} в {target_slot['time']}.\nПроверьте ЛК!")
-                    print("Запись успешна. Завершаю работу.")
-                    input("Нажмите Enter для выхода...")
-                    is_booked = True
-                    break # Выходим из цикла перебора дат
-                else:
-                    send_vk_message(f"❌ Слот на {target_date} был, но автозапись не удалась.")
+                if slots:
+                    print(f"🔥 Найдено {len(slots)} слотов на {target_date}!")
+                    send_vk_message(f"🔥 Появились места на {target_date}! Пробую записаться...")
+                    
+                    # Берем первый попавшийся слот
+                    target_slot = slots[0]
+                    success = auto_book_slot(session, target_slot["url"])
+                    
+                    if success:
+                        send_vk_message(f"🎉 УСПЕХ! Вы записаны на {target_date} в {target_slot['time']}.\nПроверьте ЛК!")
+                        print("Запись успешна. Завершаю работу.")
+                        is_booked = True
+                        break # Выходим из цикла перебора дат
+                    else:
+                        send_vk_message(f"❌ Слот на {target_date} был, но автозапись не удалась.")
+                
+                time.sleep(1) # Небольшая пауза между проверкой разных дат
+                
+            if is_booked:
+                break # Выходим из бесконечного цикла while, если записались
+                
+            time.sleep(sleep_time) # Ждем перед новым кругом проверок
             
-            time.sleep(1) # Небольшая пауза между проверкой разных дат
-            
-        if is_booked:
-            sys.exit(0) # Полностью выключаем бота, если он успешно записал
-
-        time.sleep(sleep_time)
+    except Exception as e:
+        print("\n" + "="*50)
+        print("❌ ПРОИЗОШЛА КРИТИЧЕСКАЯ ОШИБКА:")
+        print(e)
+        print("="*50)
+    finally:
+        # Этот блок сработает при любом раскладе: и при успехе, и при ошибке
+        input("\nНажмите Enter, чтобы закрыть окно...")
